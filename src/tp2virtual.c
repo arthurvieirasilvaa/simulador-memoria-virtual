@@ -37,33 +37,33 @@ int check_arguments(int argc, char *argv[]) {
     return 0;
 }
 
-void display_results(char *arquivo_entrada, unsigned int total_memoria, unsigned int pagina_tam, char *algoritmo_utilizado) {
+void display_results(char *input_file, unsigned int total_memory, unsigned int page_size, char *algorithm) {
     printf("Executando o simulador...\n");
-    printf("Arquivo de entrada: %s\n", arquivo_entrada);
-    printf("Tamanho da memória: %dKB\n", total_memoria);
-    printf("Tamanho das páginas: %dKB\n", pagina_tam);
-    printf("Técnica de reposição: %s\n", algoritmo_utilizado);
+    printf("Arquivo de entrada: %s\n", input_file);
+    printf("Tamanho da memória: %dKB\n", total_memory);
+    printf("Tamanho das páginas: %dKB\n", page_size);
+    printf("Técnica de reposição: %s\n", algorithm);
 }
 
-unsigned int hash_function(unsigned int chave, unsigned int TAM_HASH) {
-    return chave % TAM_HASH;
+unsigned int hash_function(unsigned int key, unsigned int TABLE_SIZE) {
+    return key % TABLE_SIZE;
 }
 
-unsigned int determine_page(unsigned int pagina_tam) {
+unsigned int determine_page(unsigned addr, unsigned int page_size) {
     unsigned int s, tmp;
 
     // Derivar o valor de s:
-    tmp = pagina_tam;
+    tmp = page_size;
     s = 0;
     while(tmp > 1) {
         tmp = tmp>>1;
         s++;
     }
 
-    return s;
+    return addr >> s;
 }
 
-void read_file(char *input_file) {
+void read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZE, unsigned int page_size) {
     FILE *input;
     char caminho[100] = "./logs/";
     strcat(caminho, input_file);
@@ -76,6 +76,11 @@ void read_file(char *input_file) {
         exit(1);
     }
 
+    // Número de quadros restantes que ainda podem ser utilizados:
+    unsigned int frames_left = TABLE_SIZE;
+    unsigned int page_number, page_index;
+    int page_found;
+
     ReadingData readingData;
     OutputData outputData;
 
@@ -83,8 +88,38 @@ void read_file(char *input_file) {
     outputData.page_faults = 0;
     outputData.written_pages = 0;
 
+    Page *aux = NULL;
     while((fscanf(input, "%x %c", &readingData.addr, &readingData.rw)) != EOF) {
-        outputData.memory_accesses += 1;
+        page_number = determine_page(readingData.addr, page_size);
+        page_index = hash_function(page_number, TABLE_SIZE);
+
+        /*
+            Se o rw do endereço de memória não for 'R' ou 'W', ignoramos a
+            linha atual e lemos o próximo endereço de memória:
+        */
+        
+        if(readingData.rw != 'R' || readingData.rw != 'W') {
+            continue;
+        }
+
+        aux = hash_table[page_index];
+        page_found = -1;
+        while(aux) {
+            if((*aux).page_number == page_number) {
+                page_found = 0;
+                break;
+            } 
+
+            aux = aux->next;
+        }
+
+        if(page_found == -1) {
+            outputData.page_faults++;
+        }
+
+        else {
+
+        } 
     }
 }
 
@@ -109,9 +144,9 @@ int main(int argc, char *argv[]) {
     unsigned int page_size = atoi(argv[3]);
     unsigned int total_memory = atoi(argv[4]);
 
-    unsigned int HASH_SIZE = total_memory / page_size;
-    printf("Número de entradas na tabela de páginas: %u\n", HASH_SIZE);
-    Page *hash_table = (Page*) malloc(HASH_SIZE * sizeof(Page));
+    unsigned int TABLE_SIZE = total_memory / page_size;
+    printf("Número de entradas na tabela de páginas: %u\n", TABLE_SIZE);
+    Page *hash_table = (Page*) malloc(TABLE_SIZE * sizeof(Page));
 
     // Verificando se a memória foi alocada corretamente:
     if(hash_table == NULL) {
@@ -119,7 +154,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    read_file(input_file);
+    read_file(input_file, &hash_table, TABLE_SIZE, page_size);
 
     display_results(input_file, total_memory, page_size, algorithm);
     

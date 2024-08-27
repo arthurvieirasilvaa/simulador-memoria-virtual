@@ -1,8 +1,9 @@
 typedef struct Page {
-    unsigned int frame_number;
+    unsigned int page_number;
     unsigned int present;
     unsigned int referenced;
     unsigned int modified;
+    unsigned int valid;
     unsigned int last_access;
     struct Page *next;
 }Page;
@@ -17,3 +18,13 @@ typedef struct  {
     unsigned int page_faults;
     unsigned int written_pages;
 }OutputData;
+
+typedef struct Node {
+    Page page;
+    struct node *next;
+}Node;
+
+typedef struct List {
+    Node *beginning, *end;
+    unsigned int size;
+}List;
