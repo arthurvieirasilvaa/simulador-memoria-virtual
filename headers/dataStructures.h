@@ -3,7 +3,7 @@ typedef struct Page {
     unsigned int referenced;
     unsigned int modified;
     unsigned int valid;
-    unsigned int last_access;
+    unsigned int counter; // variáve. utilizado no algoritmo LRU
     struct Page *next;
 }Page;
 

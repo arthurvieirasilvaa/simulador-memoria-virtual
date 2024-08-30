@@ -6,9 +6,10 @@
 #include "../headers/tp2virtual.h"
 #include "../headers/algorithms.h"
 
+// Função utilizada para verificar se os argumentos passados estão corretos:
 int check_arguments(int argc, char *argv[]) {
     // Verificando se o número de argumentos passados está correto:
-    if(argc < 5) {
+    if(argc != 5 && argc != 6) {
         printf("Número de argumentos inválido!\n");
         return -1;
     }
@@ -35,9 +36,17 @@ int check_arguments(int argc, char *argv[]) {
         return -1;
     }
 
+    if(argc == 6) {
+        if(strcmp(argv[5], "debug") != 0) {
+            printf("O último parâmetro fornecido está incorreto. O correto é: debug!\n");
+            return -1;       
+        }
+    }
+
     return 0;
 }
 
+// Função utilizada para gerar o relatório final:
 void display_results(char *input_file, unsigned int total_memory, unsigned int page_size, char *algorithm, OutputData outputData) {
     printf("Arquivo de entrada: %s\n", input_file);
     printf("Tamanho da memória: %dKB\n", total_memory);
@@ -48,10 +57,12 @@ void display_results(char *input_file, unsigned int total_memory, unsigned int p
     printf("Faltas de páginas: %u\n", outputData.page_faults);
 }
 
+// Função hash utilizada para determinar o índice usado na hash_table:
 unsigned int hash_function(unsigned int key, unsigned int TABLE_SIZE) {
     return key % TABLE_SIZE;
 }
 
+// Função utilizada para determinar a página associada a um endereço:
 unsigned int determine_page(unsigned addr, unsigned int page_size) {
     unsigned int s, tmp;
 
@@ -66,7 +77,54 @@ unsigned int determine_page(unsigned addr, unsigned int page_size) {
     return addr >> s;
 }
 
-OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZE, unsigned int page_size, char *algorithm) {
+/*
+    Função utilizada para salvar um arquivo "depuracao.txt" se caso debug for
+    passado como último argumento, descrevendo o que é feito a cada acesso à
+    memória:
+*/
+void save_test_file(Page *page, int page_found, char rw) {
+    FILE *output;
+    output = fopen("./depuracao.txt", "a");
+
+    // Erro ao criar/abrir o arquivo de teste:
+    if(output == NULL) {
+        printf("Ocorreu um erro ao criar/abrir o arquivo de teste!\n");
+        exit(1);
+    }
+
+    fprintf(output, "Página %u acessada!\n", page->page_number);
+
+    if(page_found == 0) {
+        fprintf(output, "Ocorreu um page fault!\n");
+
+        if(rw == 'W') {
+            fprintf(output, "Necessário atualizar a cópia que está no disco!\n");
+        }
+
+        else {
+            fprintf(output, "Página lida!\n");
+        }
+    }
+
+    else {
+        fprintf(output, "Não ocorreu um page fault!\n");
+
+        if(rw == 'W') {
+            fprintf(output, "Necessário atualizar a cópia que está no disco!\n");
+        }
+
+        else {
+            fprintf(output, "Página lida!\n");
+        }
+    }
+
+    fprintf(output, "\n");
+
+    fclose(output);
+}
+
+// Função utilizada para ler o arquivo de entrada fornecido como parâmetro:
+OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZE, unsigned int page_size, char *algorithm, unsigned int debug_mode) {
     FILE *input;
     char caminho[100] = "./logs/";
     strcat(caminho, input_file);
@@ -81,6 +139,7 @@ OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZ
 
     unsigned int page_number, page_index;
     int page_found;
+    unsigned int clock_count = 0;
 
     ReadingData readingData;
     OutputData outputData;
@@ -97,6 +156,19 @@ OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZ
     Page *last_page = NULL;
 
     while((fscanf(input, "%x %c", &readingData.addr, &readingData.rw)) != EOF) {
+
+        if(clock_count >= CLOCK_INTERRUPT) {
+            if(strcmp(algorithm, "lru") == 0) {
+                update_pages_ages(hash_table, TABLE_SIZE);
+            }
+
+            else if(strcmp(algorithm, "nru") == 0) {
+                update_referenced_bit(hash_table, TABLE_SIZE);
+            }
+
+            clock_count = 0;
+        }
+
         page_number = determine_page(readingData.addr, page_size);
         page_index = hash_function(page_number, TABLE_SIZE);
 
@@ -130,7 +202,7 @@ OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZ
 
             // Se o algoritmo escolhido for o nru, o executamos:
             else if(strcmp(algorithm, "nru") == 0) {
-
+                nru(hash_table, TABLE_SIZE);
             }
 
             // Se o algoritmo escolhido for o segunda_chance, o executamos:
@@ -178,6 +250,10 @@ OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZ
 
             new_page->next = NULL;
             outputData.page_faults++;
+
+            if(debug_mode == 1) {
+                save_test_file(new_page, page_found, readingData.rw);
+            }
         }
             
         // A página já está referenciada na memória principal:
@@ -192,13 +268,23 @@ OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZ
                 (*page).modified = 1;
                 outputData.written_pages++;
             }
+
+            if(debug_mode == 1) {
+                save_test_file(page, page_found, readingData.rw);
+            }
         }
+
+        clock_count++;
     }
 
     fclose(input);
     return outputData;
 }
 
+/*
+    Função utilizada para liberar cada página na tabela de páginas e em seguida
+    liberar a tabela de páginas como um todo:
+*/
 void free_hash_table(Page **hash_table, unsigned int TABLE_SIZE) {
     for(unsigned int i = 0; i < TABLE_SIZE; i++) {
         Page *page = hash_table[i];
@@ -252,8 +338,13 @@ int main(int argc, char *argv[]) {
         hash_table[i] = NULL;
     }
 
+    unsigned int debug_mode = 0;
+    if(argc == 6) {
+        debug_mode = 1;
+    }
+
     printf("Executando o simulador...\n");
-    OutputData outputdata = read_file(input_file, hash_table, TABLE_SIZE, page_size, algorithm);
+    OutputData outputdata = read_file(input_file, hash_table, TABLE_SIZE, page_size, algorithm, debug_mode);
 
     display_results(input_file, total_memory, page_size, algorithm, outputdata);
     
