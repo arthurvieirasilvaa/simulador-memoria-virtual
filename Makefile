@@ -6,7 +6,7 @@ TARGET = tp2virtual
 
 SRC_DIR = src
 
-SRCS = $(SRC_DIR)/tp2virtual.c
+SRCS = $(SRC_DIR)/tp2virtual.c $(SRC_DIR)/algorithms.c
 
 OBJS = $(SRCS:.c=.o)
 
