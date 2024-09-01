@@ -1,0 +1,8 @@
+Instruções para compilação e execução:
+
+=> make - para compilar;
+=> ./tp2virtual <<algoritmo de substituição>> <<arquivo de teste>> <<tamanho de cada página/quadro>> <<tamanho da memória física disponível>> - para executar.
+
+Ex: ./tp2virtual lru arquivo.log 4 128
+
+Obs: Os arquivos de teste precisam ser mantidos dentro da pasta logs!

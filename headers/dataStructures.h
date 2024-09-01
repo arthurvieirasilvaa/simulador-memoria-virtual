@@ -2,8 +2,7 @@ typedef struct Page {
     unsigned int page_number;
     unsigned int referenced;
     unsigned int modified;
-    unsigned int valid;
-    unsigned int counter; // variáve. utilizado no algoritmo LRU
+    unsigned int counter; // variável utilizada no algoritmo LRU
     struct Page *next;
 }Page;
 

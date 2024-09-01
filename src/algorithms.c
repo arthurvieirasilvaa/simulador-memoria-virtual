@@ -65,10 +65,13 @@ void remove_page(Page **hash_table, Page *removed_page, unsigned int TABLE_SIZE)
     Page *prev = NULL;
     
     if(removed_page) {
-        unsigned int index = hash_function((*removed_page).page_number, TABLE_SIZE);
+        unsigned int index = hash_function(removed_page->page_number, TABLE_SIZE);
         aux = hash_table[index];
-    
+
+        // Procura-se cada página na hash_table[index]:
         while(aux) {
+
+            // Página procurada foi encontrada:
             if(aux == removed_page) {
                 if(prev) {
                     prev->next = removed_page->next;
@@ -78,6 +81,7 @@ void remove_page(Page **hash_table, Page *removed_page, unsigned int TABLE_SIZE)
                     hash_table[index] = removed_page->next;
                 }
 
+                // Liberando a memória alocada dinamicamente:
                 free(removed_page);
 
                 prev = aux;
@@ -97,35 +101,46 @@ void remove_page(Page **hash_table, Page *removed_page, unsigned int TABLE_SIZE)
 */
 void update_pages_ages(Page **hash_table, unsigned int TABLE_SIZE) {
     Page *page = NULL;
+
+    // Procura-se cada lista de cada posição na tabela hash:
     for(unsigned int i = 0; i < TABLE_SIZE; i++) {
         page = hash_table[i];
 
+        // Procura-se cada página na hash_table[i]:
         while(page) {
-            (*page).counter >>= 1; // shift right nos bits de age
+            page->counter >>= 1; // shift right nos bits de age
 
             // O bit R é adicionado no bit mais à esquerda de age:
-            (*page).counter |= ((*page).referenced << 7);
+            page->counter |= (page->referenced << 7);
 
-            (*page).referenced = 0;
+            page->referenced = 0;
 
             page = page->next;
         }
     }
 }
 
-// Algoritmo LRU (Least Recently Used ) de substituição de páginas:
+// Algoritmo LRU (Least Recently Used) de substituição de páginas:
 void lru(Page **hash_table, unsigned int TABLE_SIZE) {
     Page *lru_page = NULL;
     Page *page = NULL;
-    unsigned int min_counter = 256;
+    
+    // Inicialmente o menor valor para contador é definido:
+    unsigned int min_counter = 256; 
 
+    // Procura-se cada lista de cada posição na tabela hash:
     for(unsigned int i = 0; i < TABLE_SIZE; i++) {
         page = hash_table[i];
 
+        // Procura-se cada página na hash_table[i]:
         while(page) {
             
-            if((*page).counter < min_counter) {
-                min_counter = (*page).counter; 
+            /*
+                Verifica-se se o contador da página atual é menor do que
+                min_counter:
+            */
+            if(page->counter < min_counter) {
+                min_counter = page->counter; 
                 lru_page = page;
             }
 
@@ -133,6 +148,7 @@ void lru(Page **hash_table, unsigned int TABLE_SIZE) {
         }
     }
 
+    // É removida a página cujo contador é o mais baixo:
     remove_page(hash_table, lru_page, TABLE_SIZE);
 }
 
@@ -143,11 +159,13 @@ void lru(Page **hash_table, unsigned int TABLE_SIZE) {
 void update_referenced_bit(Page **hash_table, unsigned int TABLE_SIZE) {
     Page *page = NULL;
 
+    // Procura-se cada lista de cada posição na tabela hash:
     for(unsigned int i = 0; i < TABLE_SIZE; i++) {
         page = hash_table[i];
 
+        // Procura-se cada página na hash_table[i]:
         while(page) {
-            (*page).referenced = 0;
+            page->referenced = 0; // o bit R é limpo
             page = page->next;
         }
     }
@@ -157,38 +175,46 @@ void update_referenced_bit(Page **hash_table, unsigned int TABLE_SIZE) {
 void nru(Page **hash_table, unsigned int TABLE_SIZE) {
     Page *aux = NULL;
     Page *removed_page = NULL;
-    unsigned int current_class = 4;
+
+    // Inicialmente o maior valor para a classe atual é definido:
+    unsigned int current_class = 4; 
     unsigned int page_class;
 
+    // Procura-se cada lista de cada posição na tabela hash:
     for (unsigned int i = 0; i < TABLE_SIZE; i++) {
         aux = hash_table[i];
+        
+        // Procura-se cada página na hash_table[i]:
         while (aux) {
-            page_class = 4;
-
             // Classe 0: não referenciada, não modificada:
-            if((*aux).referenced == 0 && (*aux).modified == 0) {
+            if(aux->referenced == 0 && aux->modified == 0) {
                 page_class = 0;
             }
             
             // Classe 1: não referenciada, modificada:
-            else if((*aux).referenced == 0 && (*aux).modified == 1) {
+            else if(aux->referenced == 0 && aux->modified == 1) {
                 page_class = 1;
             }
 
             // Classe 2: referenciada, não modificada:
-            else if((*aux).referenced == 1 && (*aux).modified == 0) {
+            else if(aux->referenced == 1 && aux->modified == 0) {
                 page_class = 2;
             }
 
             // Classe 3: referenciada, modificada:
-            else if((*aux).referenced == 1 && (*aux).modified == 1) {
+            else if(aux->referenced == 1 && aux->modified == 1) {
                 page_class = 3;
             }
 
+            /*
+                Verifica-se se a classe dessa página é menor do que a classe
+                atual encontrada:
+            */
             if(page_class < current_class) {
                 removed_page = aux;
                 current_class = page_class;
 
+                // Se a classe atual encontrada for 0, o laço é finalizado:
                 if(current_class == 0) {
                     break;
                 }
@@ -198,6 +224,7 @@ void nru(Page **hash_table, unsigned int TABLE_SIZE) {
         }
     }
     
+    // Remove a página de classe de ordem mais baixa:
     remove_page(hash_table, removed_page, TABLE_SIZE);
 }
 
@@ -213,15 +240,16 @@ void second_chance(Page **hash_table, unsigned int TABLE_SIZE, List *list) {
         exit(1);
     }  
 
-    // Fazer as alterações na tabela de páginas também:
-
+    // Faz uma busca na lista de páginas na memória:
     while(node) {
-
+        
+        // Verifica-se se o bit R = 0:
         if(node->page.referenced == 0) {
             removed_node = remove_first_element(list);
             break;
         }
 
+        // Verifica-se se o bit R = 1:
         else if(node->page.referenced == 1) {
             node->page.referenced = 0;
             removed_node = remove_first_element(list);
@@ -231,5 +259,6 @@ void second_chance(Page **hash_table, unsigned int TABLE_SIZE, List *list) {
         node = node->next;
     }
 
+    // A página mais antiga é removida:
     remove_page(hash_table, &(*removed_node).page, TABLE_SIZE);
 }

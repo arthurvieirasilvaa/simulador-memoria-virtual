@@ -119,7 +119,6 @@ void save_test_file(Page *page, int page_found, char rw) {
     }
 
     fprintf(output, "\n");
-
     fclose(output);
 }
 
@@ -139,6 +138,7 @@ OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZ
 
     unsigned int page_number, page_index;
     int page_found;
+    int frames_left = TABLE_SIZE;
     unsigned int clock_count = 0;
 
     ReadingData readingData;
@@ -169,6 +169,7 @@ OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZ
             clock_count = 0;
         }
 
+        // Obtém o número da página e o índice da página na tabela hash:
         page_number = determine_page(readingData.addr, page_size);
         page_index = hash_function(page_number, TABLE_SIZE);
 
@@ -181,10 +182,13 @@ OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZ
             continue;
         }
 
+
         page = hash_table[page_index];
         page_found = 0;
+        
+        // Verifica se a página está na tabela hash em uma dada posição:
         while(page) {
-            if((*page).page_number == page_number) {
+            if(page->page_number == page_number) {
                 page_found = 1;
                 break;
             } 
@@ -195,19 +199,25 @@ OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZ
         // A página não está referenciada na memória principal:
         if(page_found == 0) {
 
-            // Se o algoritmo escolhido for o lru, o executamos:
-            if(strcmp(algorithm, "lru") == 0) {
-                lru(hash_table, TABLE_SIZE);
+            if(frames_left <= 0) {
+                // Se o algoritmo escolhido for o lru, o executamos:
+                if(strcmp(algorithm, "lru") == 0) {
+                    lru(hash_table, TABLE_SIZE);
+                }
+
+                // Se o algoritmo escolhido for o nru, o executamos:
+                else if(strcmp(algorithm, "nru") == 0) {
+                    nru(hash_table, TABLE_SIZE);
+                }
+
+                // Se o algoritmo escolhido for o segunda_chance, o executamos:
+                else {
+                    second_chance(hash_table, TABLE_SIZE, &list);
+                }
             }
 
-            // Se o algoritmo escolhido for o nru, o executamos:
-            else if(strcmp(algorithm, "nru") == 0) {
-                nru(hash_table, TABLE_SIZE);
-            }
-
-            // Se o algoritmo escolhido for o segunda_chance, o executamos:
             else {
-                second_chance(hash_table, TABLE_SIZE, &list);
+                frames_left--;
             }
 
             Page *new_page = (Page*) malloc(sizeof(Page));
@@ -218,20 +228,19 @@ OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZ
                 exit(1);
             }
 
-            (*new_page).page_number = page_number;
-            (*new_page).referenced = 1;
+            new_page->page_number = page_number;
+            new_page->referenced = 1;
             
             if(readingData.rw == 'R') {
+                new_page->modified = 0;
                 outputData.read_pages++;
             }
 
             else {
-                (*new_page).modified = 1;
+                new_page->modified = 1;
                 outputData.written_pages++;
             }
 
-            (*new_page).valid = 1;
-            
             // Se ainda não há nenhuma página em hash_table[page_index]:
             if(hash_table[page_index] == NULL) {
                 hash_table[page_index] = new_page;
@@ -258,14 +267,15 @@ OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZ
             
         // A página já está referenciada na memória principal:
         else {
-            (*page).referenced = 1;
+            page->referenced = 1;
             
             if(readingData.rw == 'R') {
+                page->modified = 0;
                 outputData.read_pages++;
             }
 
             else {
-                (*page).modified = 1;
+                page->modified = 1;
                 outputData.written_pages++;
             }
 
@@ -282,8 +292,8 @@ OutputData read_file(char *input_file, Page **hash_table, unsigned int TABLE_SIZ
 }
 
 /*
-    Função utilizada para liberar cada página na tabela de páginas e em seguida
-    liberar a tabela de páginas como um todo:
+    Função utilizada para liberar cada página na tabela de páginas e, em 
+    seguida, liberar a tabela de páginas como um todo:
 */
 void free_hash_table(Page **hash_table, unsigned int TABLE_SIZE) {
     for(unsigned int i = 0; i < TABLE_SIZE; i++) {
